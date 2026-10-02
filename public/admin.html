@@ -33,12 +33,26 @@
 
     <section class="card">
       <h2>Prices</h2>
-      <p>Downloads the full PriceCharting CSV. It also runs by itself every REFRESH_HOURS. PriceCharting allows one download every 10 minutes and rebuilds the file once a day.</p>
+      <p>PriceCharting only (needs their Legendary plan). Downloads the full PriceCharting CSV. It also runs by itself every REFRESH_HOURS. PriceCharting allows one download every 10 minutes and rebuilds the file once a day.</p>
       <div class="row-btns"><button class="btn primary" id="refreshPrices">Refresh prices now</button></div>
       <label class="blk" for="cardId">Refresh one card through the API (PriceCharting product id)</label>
       <input type="text" id="cardId" placeholder="e.g. 6910">
       <div class="row-btns"><button class="btn" id="refreshCard">Refresh card</button></div>
       <pre class="out" id="priceOut" hidden></pre>
+    </section>
+
+    <section class="card">
+      <h2>PokemonPriceTracker</h2>
+      <p>Loads raw and graded prices one set at a time, using PPT_API_KEY from .env. Each card costs about 3 credits with graded prices. A free account gets 100 credits a day, so use <b>Max cards</b> to stay inside it.</p>
+      <label class="blk" for="pptSearch">Find sets</label>
+      <input type="text" id="pptSearch" placeholder="e.g. Evolving">
+      <div class="row-btns"><button class="btn" id="pptFind">Find sets</button></div>
+      <label class="blk" for="pptSet">Set name or id</label>
+      <input type="text" id="pptSet" placeholder="e.g. Evolving Skies">
+      <label class="blk" for="pptLimit">Max cards (blank = whole set)</label>
+      <input type="number" id="pptLimit" min="1" value="10">
+      <div class="row-btns"><button class="btn primary" id="pptLoad">Load set</button><button class="btn" id="clearOther">Remove sample / PriceCharting prices</button></div>
+      <pre class="out" id="pptOut" hidden></pre>
     </section>
 
     <section class="card">
@@ -119,6 +133,18 @@ $('importCsv').onclick=e=>busy(e.target,async()=>{
 $('unmatched').onclick=e=>busy(e.target,async()=>{
   const set=$('setPick').value;if(!set)return show('unOut','Pick a set first.');
   try{const j=await api('/api/admin/unmatched?set='+encodeURIComponent(set));show('unOut',j.list.length?j.list.map(x=>`${x.conf.padEnd(6)} ${x.name}${x.psaName?'  →  '+x.psaName:''}`).join('\n'):'Every card in this set matched.')}catch(err){show('unOut',err.message)}
+});
+$('pptFind').onclick=e=>busy(e.target,async()=>{
+  try{const j=await api('/api/admin/ppt/sets?search='+encodeURIComponent($('pptSearch').value.trim()));show('pptOut',j.sets.length?j.sets.map(x=>`${x.name}${x.id!=null?'  (id '+x.id+')':''}${x.released?'  '+String(x.released).slice(0,10):''}`).join('\n'):'No sets found.')}catch(err){show('pptOut',err.message)}
+});
+$('pptLoad').onclick=e=>busy(e.target,async()=>{
+  const set=$('pptSet').value.trim();if(!set)return show('pptOut','Enter a set name or id.');
+  show('pptOut','Loading…');
+  try{show('pptOut',await api('/api/admin/ppt/load',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({set,limit:+$('pptLimit').value||0})}));loadSets();status()}catch(err){show('pptOut',err.message)}
+});
+$('clearOther').onclick=e=>busy(e.target,async()=>{
+  if(!confirm('Remove every card that did not come from PokemonPriceTracker?'))return;
+  try{show('pptOut',await api('/api/admin/clear-prices',{method:'POST',headers:{'content-type':'application/json'},body:'{}'}));loadSets();status()}catch(err){show('pptOut',err.message)}
 });
 status();if(TOKEN)loadSets();
 </script>

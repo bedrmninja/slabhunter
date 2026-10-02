@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import { readJSON, writeJSON, csvToObjects } from './lib/util.js';
 import { downloadPriceGuide, fetchProduct, isPokemon } from './lib/pricecharting.js';
 import { normalizePopRow, matchPop, fetchSetFromApify } from './lib/pop.js';
+import { fetchSet as fetchPptSet, searchSets as searchPptSets } from './lib/pokemonpricetracker.js';
 
 const PORT = +process.env.PORT || 3000;
 const REFRESH_MS = (+process.env.REFRESH_HOURS || 24) * 3600 * 1000;
@@ -28,6 +29,7 @@ function rebuild() {
     cards.push({
       id: p.id, n: p.name, s: p.set, raw: p.raw, g8: p.g8, g9: p.g9, g95: p.g95,
       psa10: p.psa10, bgs10: p.bgs10, cgc10: p.cgc10, vol: p.vol,
+      ...(p.src === 'ppt' && p.tcgId ? { u: `https://www.tcgplayer.com/product/${encodeURIComponent(p.tcgId)}` } : {}),
       ...(mp ? { p10: mp.pop10, p9: mp.pop9, pt: mp.total, pc: mp.conf, pn: mp.psaName } : {}),
     });
   }
@@ -42,7 +44,8 @@ async function refreshPrices() {
   try {
     const products = await downloadPriceGuide();
     if (!products.length) throw new Error('The CSV had no Pokémon products. Check the download link.');
-    prices = { updatedAt: new Date().toISOString(), products };
+    // Keep sets loaded from PokemonPriceTracker; the CSV only replaces PriceCharting cards.
+    prices = { updatedAt: new Date().toISOString(), products: [...products, ...prices.products.filter(p => p.src === 'ppt')] };
     writeJSON('prices', prices);
     lastPriceError = null;
     rebuild();
@@ -95,6 +98,8 @@ app.get('/api/status', (req, res) => {
     refreshing,
     csvConfigured: !!(process.env.PRICECHARTING_CSV_URL || process.env.PRICECHARTING_CSV_FILE),
     apiConfigured: !!process.env.PRICECHARTING_TOKEN,
+    pptConfigured: !!process.env.PPT_API_KEY,
+    pptSets: [...new Set(prices.products.filter(p => p.src === 'ppt').map(p => p.set))],
     apifyConfigured: !!process.env.APIFY_TOKEN,
     pop: Object.fromEntries(Object.entries(pop.sets).map(([k, v]) => [k, { rows: v.rows.length, importedAt: v.importedAt, source: v.source }])),
     matched: matchStats.matched,
@@ -117,6 +122,42 @@ app.post('/api/admin/refresh-card/:id', admin, wrap(async (req, res) => {
   rebuild();
   res.json(fresh);
 }));
+
+// PokemonPriceTracker: load (or reload) one set. Replaces that set's PokemonPriceTracker cards.
+app.post('/api/admin/ppt/load', admin, wrap(async (req, res) => {
+  const set = String(req.body?.set || '').trim();
+  if (!set) throw new Error('Enter a set name or set id (e.g. "Evolving Skies"). Use "Find sets" to look one up.');
+  const limit = Math.max(0, Math.floor(+req.body?.limit || 0));
+  const { products, received, usage, sample } = await fetchPptSet({ set, limit, graded: req.body?.graded !== false });
+  const withTen = products.filter(p => p.psa10 || p.bgs10 || p.cgc10).length;
+  if (products.length) {
+    prices = {
+      updatedAt: new Date().toISOString(),
+      products: [...prices.products.filter(p => !(p.src === 'ppt' && p.set === set)), ...products],
+    };
+    writeJSON('prices', prices);
+    rebuild();
+  }
+  res.json({
+    set, received, loaded: products.length, withGradedPrice: withTen, withRawPrice: products.filter(p => p.raw).length,
+    creditsInfo: usage, sampleKeys: sample ? Object.keys(sample) : [],
+    // Only shown when graded prices didn't come through, so you can see what fields the API used.
+    ...(products.length && !withTen ? { sample } : {}),
+  });
+}));
+
+app.get('/api/admin/ppt/sets', admin, wrap(async (req, res) => {
+  res.json(await searchPptSets(String(req.query.search || '').trim()));
+}));
+
+// Drop prices that didn't come from PokemonPriceTracker (e.g. the sample CSV), or everything.
+app.post('/api/admin/clear-prices', admin, (req, res) => {
+  const before = prices.products.length;
+  prices = { ...prices, products: req.body?.all ? [] : prices.products.filter(p => p.src === 'ppt') };
+  writeJSON('prices', prices);
+  rebuild();
+  res.json({ removed: before - prices.products.length, left: prices.products.length });
+});
 
 app.get('/api/admin/sets', admin, (req, res) => {
   const pcSets = [...new Set(prices.products.map(p => p.set))].sort();

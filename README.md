@@ -7,6 +7,7 @@ public/index.html   the ranking app (all maths runs in the browser)
 public/admin.html   refresh prices, map sets, import pop data
 server.js           holds your keys, caches data, serves both pages
 lib/pricecharting.js  CSV download + throttled /api/product calls
+lib/pokemonpricetracker.js  per-set price loading from PokemonPriceTracker
 lib/pop.js          pop row parsing + matching pop rows to PriceCharting cards
 ```
 
@@ -21,6 +22,18 @@ npm start                 # http://localhost:3000, admin at /admin
 ```
 
 To try it without a subscription, set `PRICECHARTING_CSV_FILE=./sample/prices.csv` and `ADMIN_TOKEN=anything`. Then import `sample/pop-evolving-skies.csv` for the set "Pokemon Evolving Skies" on the admin page. The sample prices are made up.
+
+## Prices from PokemonPriceTracker (instead of PriceCharting)
+
+If you don't have PriceCharting's Legendary plan, prices can come from pokemonpricetracker.com.
+
+1. Put your API key in `.env` as `PPT_API_KEY=...` and restart.
+2. On the admin page, use **Find sets** to get the exact set name, then **Load set**.
+3. Click **Remove sample / PriceCharting prices** once, so the made-up sample cards go away.
+
+Each card costs about 3 credits with graded prices (1 for the card, 2 for eBay graded sales). The free account's 100 credits a day covers about 30 cards, so **Max cards** defaults to 10. Leave it blank to load a whole set on a paid plan. Loading a set again replaces that set's prices.
+
+The connector's field names come from PokemonPriceTracker's docs and weren't checked against a real response. If a load says `withGradedPrice: 0`, the output includes one raw card from their API: add its field names to the alias lists at the top of `lib/pokemonpricetracker.js`.
 
 ## Fill in .env
 

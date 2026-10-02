@@ -31,3 +31,19 @@ test('matching picks the right variant', () => {
   assert.equal(m.get('1005').pop10, 120, 'regular goes to regular row');
   assert.ok(!m.has('1006'), 'booster box has no number, no match');
 });
+
+test('PokemonPriceTracker cards normalize', async () => {
+  const { normalizeCard } = await import('../lib/pokemonpricetracker.js');
+  const p = normalizeCard({
+    tcgPlayerId: 246723, name: 'Umbreon VMAX', cardNumber: '215/203', setName: 'Evolving Skies',
+    prices: { market: 1350.5 },
+    ebay: { salesByGrade: { psa10: { medianPrice: 3300, count: 40 }, psa9: { medianPrice: 1700, count: 25 } } },
+  }, 'Evolving Skies');
+  assert.equal(p.id, 'ppt-246723');
+  assert.equal(p.name, 'Umbreon VMAX #215');
+  assert.equal(p.raw, 1350.5);
+  assert.equal(p.psa10, 3300);
+  assert.equal(p.g9, 1700);
+  assert.equal(p.vol, 65);
+  assert.equal(numberFromName(p.name), '215');
+});

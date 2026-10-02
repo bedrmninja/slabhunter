@@ -100,8 +100,8 @@
           <p><b>Expected profit</b> weighs every outcome: chance of a 10 × the 10 price, chance of the near grade × its price, and everything else at the Grade 8 price, all after selling fees, minus cost. For PSA the near grade is 9; for BGS and CGC it's 9.5.</p>
           <p><b>10 chance</b> comes from the PSA pop report when a card is matched (tagged <span class="src pop">pop</span>), otherwise your default (<span class="src">default</span>). A dashed tag means the match to PSA's list was uncertain, so it isn't used. Type in the box to set your own (<span class="src yours">yours</span>). Pop data only covers PSA; BGS and CGC use your defaults.</p>
           <p><b>Break-even</b> is how often the card must come back a 10 for you not to lose money. <b>Most room above break-even</b> ranks by the gap between the card's 10 chance and that break-even point: the safest bets, not the biggest.</p>
-          <p><b>Sales/yr</b> is PriceCharting's yearly sales volume. A great return on a card that sells twice a year is hard to cash out.</p>
-          <p>Prices from <a href="https://www.pricecharting.com" target="_blank" rel="noopener">PriceCharting</a>. Card links go to each card's PriceCharting page.</p>
+          <p><b>Sales/yr</b> is PriceCharting's yearly sales volume. For cards from PokemonPriceTracker it's the number of graded eBay sales they recorded. A great return on a card that sells twice a year is hard to cash out.</p>
+          <p>Prices from <a href="https://www.pricecharting.com" target="_blank" rel="noopener">PriceCharting</a> or <a href="https://www.pokemonpricetracker.com" target="_blank" rel="noopener">PokemonPriceTracker</a>. Card links go to the card's PriceCharting or TCGplayer page.</p>
         </details>
       </div>
     </section>
@@ -201,7 +201,7 @@ function render(){
       const tag=r.src==='pop'?'<span class="src pop" title="From PSA pop'+(r.pn?': '+esc(r.pn):'')+'">pop</span>':r.src==='yours'?'<span class="src yours">yours</span>':`<span class="src${r.low?' low':''}" title="${r.low?'PSA match was uncertain ('+esc(r.pn||'')+'), so your default is used':'Your default'}">default</span>`;
       const popTxt=r.pt?`${r.p10.toLocaleString()} <span class="popn">/ ${r.pt.toLocaleString()}</span>`:'—';
       return `<tr>
-        <td><span class="rank">${i+1}</span><span class="nm">${esc(r.name)}</span><div class="st"><a href="https://www.pricecharting.com/game/${encodeURIComponent(r.id)}" target="_blank" rel="noopener">${esc(r.set)}</a></div></td>
+        <td><span class="rank">${i+1}</span><span class="nm">${esc(r.name)}</span><div class="st"><a href="${esc(r.u||'https://www.pricecharting.com/game/'+encodeURIComponent(r.id))}" target="_blank" rel="noopener">${esc(r.set)}</a></div></td>
         <td>${money(r.raw)}</td>
         <td>${money(r.near)}</td>
         <td>${money(r.ten)}</td>
