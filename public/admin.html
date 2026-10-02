@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Slab Hunter · Data admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>Data admin</h1>
+    <p><a href="/">Back to Slab Hunter</a></p>
+  </header>
+
+  <div class="admin-grid">
+    <section class="card">
+      <h2>Admin token</h2>
+      <p>The ADMIN_TOKEN from your .env file. It's kept in this browser only.</p>
+      <input type="password" id="tok" autocomplete="off" aria-label="Admin token">
+      <div class="row-btns"><button class="btn primary" id="saveTok">Save token</button></div>
+    </section>
+
+    <section class="card">
+      <h2>Status</h2>
+      <pre class="out" id="status">Loading…</pre>
+      <div class="row-btns"><button class="btn" id="reloadStatus">Reload status</button></div>
+    </section>
+
+    <section class="card">
+      <h2>Prices</h2>
+      <p>Downloads the full PriceCharting CSV. It also runs by itself every REFRESH_HOURS. PriceCharting allows one download every 10 minutes and rebuilds the file once a day.</p>
+      <div class="row-btns"><button class="btn primary" id="refreshPrices">Refresh prices now</button></div>
+      <label class="blk" for="cardId">Refresh one card through the API (PriceCharting product id)</label>
+      <input type="text" id="cardId" placeholder="e.g. 6910">
+      <div class="row-btns"><button class="btn" id="refreshCard">Refresh card</button></div>
+      <pre class="out" id="priceOut" hidden></pre>
+    </section>
+
+    <section class="card">
+      <h2>Map sets to PSA pop reports</h2>
+      <p>Pop data is matched set by set. For each PriceCharting set you want pop data for, paste the PSA pop report page URL for the same set (psacard.com/pop/…). One per line: <code>PriceCharting set name | PSA URL</code>.</p>
+      <textarea id="setMap" rows="8" placeholder="Pokemon Evolving Skies | https://www.psacard.com/pop/tcg-cards/2021/..."></textarea>
+      <div class="row-btns"><button class="btn primary" id="saveSets">Save mapping</button><button class="btn" id="loadSets">Reload mapping</button></div>
+      <details><summary>PriceCharting set names in your data</summary><pre class="out" id="pcSets">Save your token and reload to see them.</pre></details>
+    </section>
+
+    <section class="card">
+      <h2>Import pop data</h2>
+      <p><b>From Apify:</b> runs the actor in APIFY_ACTOR for every mapped set (or just the one picked below). Each set is a paid actor run, so run it weekly, not daily.</p>
+      <label class="blk" for="setPick">Set</label>
+      <select id="setPick"><option value="">All mapped sets</option></select>
+      <div class="row-btns"><button class="btn primary" id="runApify">Pull pop from Apify</button></div>
+      <p><b>From a CSV:</b> columns like <code>number, name, variety, pop10, pop9, total</code>. Pick the PriceCharting set these rows belong to above (not "All").</p>
+      <input type="file" id="popFile" accept=".csv,text/csv">
+      <div class="row-btns"><button class="btn" id="importCsv">Import CSV</button></div>
+      <pre class="out" id="popOut" hidden></pre>
+    </section>
+
+    <section class="card">
+      <h2>Check matches</h2>
+      <p>Cards in the chosen set with no PSA match, or an uncertain one. Uncertain matches are ignored in the rankings.</p>
+      <div class="row-btns"><button class="btn" id="unmatched">Show unmatched for selected set</button></div>
+      <pre class="out" id="unOut" hidden></pre>
+    </section>
+  </div>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+let TOKEN='';try{TOKEN=localStorage.getItem('slabhunter:admin')||''}catch(e){}
+$('tok').value=TOKEN;
+$('saveTok').onclick=()=>{TOKEN=$('tok').value.trim();try{localStorage.setItem('slabhunter:admin',TOKEN)}catch(e){};loadSets();status()};
+async function api(path,opts={}){
+  const r=await fetch(path,{...opts,headers:{'x-admin-token':TOKEN,...(opts.headers||{})}});
+  const j=await r.json().catch(()=>({error:'HTTP '+r.status}));
+  if(!r.ok)throw new Error(j.error||('HTTP '+r.status));
+  return j;
+}
+function show(id,v){const el=$(id);el.hidden=false;el.textContent=typeof v==='string'?v:JSON.stringify(v,null,2)}
+async function busy(btn,fn){btn.disabled=true;const t=btn.textContent;btn.textContent='Working…';try{await fn()}finally{btn.disabled=false;btn.textContent=t}}
+
+async function status(){try{show('status',await (await fetch('/api/status')).json())}catch(e){show('status',e.message)}}
+$('reloadStatus').onclick=status;
+
+$('refreshPrices').onclick=e=>busy(e.target,async()=>{try{const j=await api('/api/admin/refresh-prices',{method:'POST'});show('priceOut',`Loaded ${j.products.toLocaleString()} Pokémon products.`);status()}catch(err){show('priceOut',err.message)}});
+$('refreshCard').onclick=e=>busy(e.target,async()=>{const id=$('cardId').value.trim();if(!id)return show('priceOut','Enter a product id.');try{show('priceOut',await api('/api/admin/refresh-card/'+encodeURIComponent(id),{method:'POST'}))}catch(err){show('priceOut',err.message)}});
+
+async function loadSets(){
+  try{
+    const j=await api('/api/admin/sets');
+    $('setMap').value=Object.entries(j.map).map(([k,v])=>k+' | '+v).join('\n');
+    $('pcSets').textContent=j.pcSets.join('\n')||'No prices loaded yet.';
+    const pick=$('setPick');const cur=pick.value;
+    pick.innerHTML='<option value="">All mapped sets</option>'+j.pcSets.map(s=>`<option>${s.replace(/</g,'&lt;')}</option>`).join('');
+    pick.value=cur;
+  }catch(e){$('pcSets').textContent=e.message}
+}
+$('loadSets').onclick=loadSets;
+$('saveSets').onclick=e=>busy(e.target,async()=>{
+  const map={};
+  for(const line of $('setMap').value.split('\n')){const i=line.lastIndexOf('|');if(i<0)continue;const k=line.slice(0,i).trim(),v=line.slice(i+1).trim();if(k&&v)map[k]=v}
+  try{await api('/api/admin/sets',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify(map)});await loadSets();show('popOut',`Saved ${Object.keys(map).length} set mapping(s).`)}catch(err){show('popOut',err.message)}
+});
+$('runApify').onclick=e=>busy(e.target,async()=>{
+  const set=$('setPick').value;
+  show('popOut','Running… large sets can take a few minutes.');
+  try{show('popOut',await api('/api/admin/pop/apify',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(set?{set}:{})}));status()}catch(err){show('popOut',err.message)}
+});
+$('importCsv').onclick=e=>busy(e.target,async()=>{
+  const set=$('setPick').value,f=$('popFile').files[0];
+  if(!set)return show('popOut','Pick the PriceCharting set these rows belong to.');
+  if(!f)return show('popOut','Choose a CSV file.');
+  try{show('popOut',await api('/api/admin/pop/import?set='+encodeURIComponent(set),{method:'POST',headers:{'content-type':'text/csv'},body:await f.text()}));status()}catch(err){show('popOut',err.message)}
+});
+$('unmatched').onclick=e=>busy(e.target,async()=>{
+  const set=$('setPick').value;if(!set)return show('unOut','Pick a set first.');
+  try{const j=await api('/api/admin/unmatched?set='+encodeURIComponent(set));show('unOut',j.list.length?j.list.map(x=>`${x.conf.padEnd(6)} ${x.name}${x.psaName?'  →  '+x.psaName:''}`).join('\n'):'Every card in this set matched.')}catch(err){show('unOut',err.message)}
+});
+status();if(TOKEN)loadSets();
+</script>
+</body>
+</html>

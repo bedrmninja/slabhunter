@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Slab Hunter · Pokémon grading return finder</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💎</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>Slab Hunter</h1>
+    <p>Raw Pokémon cards ranked by what you should expect to make grading them, using PriceCharting prices and PSA population reports.</p>
+  </header>
+  <p class="freshness" id="fresh">Loading prices…</p>
+
+  <section class="hero" aria-live="polite">
+    <div class="slab empty" id="slab">
+      <div class="slab-label">
+        <div class="l1" id="slabSet">Loading</div>
+        <div class="l2" id="slabName">Your best candidate shows here</div>
+        <div class="grade"><small id="slabGrader">PSA</small><b>10</b></div>
+      </div>
+      <div class="slab-window"><div class="inner" id="slabInner"><div class="num">—</div><span>expected profit per card</span></div></div>
+    </div>
+    <div class="hero-copy" id="heroCopy"><h2>Loading prices</h2><p>Fetching the latest price guide.</p></div>
+  </section>
+
+  <div class="main">
+    <aside aria-label="Settings">
+      <h3>Grade you're chasing</h3>
+      <div class="seg" role="group" aria-label="Grading company">
+        <button data-g="psa" aria-pressed="true">PSA 10</button>
+        <button data-g="bgs" aria-pressed="false">BGS 10</button>
+        <button data-g="cgc" aria-pressed="false">CGC 10</button>
+      </div>
+
+      <h3>Costs per card</h3>
+      <div class="field"><label for="fee">Grading fee ($)</label><input type="number" id="fee" min="0" step="1"></div>
+      <div class="field"><label for="ship">Shipping + insurance ($)</label><input type="number" id="ship" min="0" step="1"></div>
+      <div class="field"><label for="sell">Selling fees (%)</label><input type="number" id="sell" min="0" max="50" step="0.5"></div>
+      <p class="note">Check the grader's current fee schedule; tiers depend on declared value.</p>
+
+      <h3>Grading odds</h3>
+      <label class="check" id="usePopWrap"><input type="checkbox" id="usePop" checked> Use PSA pop report where available</label>
+      <div class="field"><label for="gem" id="gemLbl">Default chance of a 10 (%)</label><input type="number" id="gem" min="0" max="100" step="1"></div>
+      <div class="field"><label for="near" id="nearLbl">Default chance of a 9 (%)</label><input type="number" id="near" min="0" max="100" step="1"></div>
+      <div class="field"><label for="k">Pop blending (cards)</label><input type="number" id="k" min="0" max="500" step="5"></div>
+      <p class="note" id="popNote">A card's pop gem rate is blended with your default, as if your default were worth this many extra graded copies. Cards with a small pop lean on your default; big pops speak for themselves. Pop rates run high because people pre-screen what they submit.</p>
+
+      <h3>Budget and liquidity</h3>
+      <div class="field"><label for="minRaw">Min raw price ($)</label><input type="number" id="minRaw" min="0" step="1"></div>
+      <div class="field"><label for="maxRaw">Max raw price ($)</label><input type="number" id="maxRaw" min="0" step="1" placeholder="any"></div>
+      <div class="field"><label for="minTen">Min 10 price ($)</label><input type="number" id="minTen" min="0" step="1"></div>
+      <div class="field"><label for="minVol">Min sales a year</label><input type="number" id="minVol" min="0" step="1"></div>
+    </aside>
+
+    <section aria-label="Results">
+      <div class="toolbar">
+        <input type="search" id="q" placeholder="Search card or set" aria-label="Search card or set">
+        <label for="sort" class="count">Rank by</label>
+        <select id="sort">
+          <option value="ev">Expected profit</option>
+          <option value="evRoi">Expected return %</option>
+          <option value="profit10">Profit if it gets a 10</option>
+          <option value="mult">10 price ÷ raw price</option>
+          <option value="be">Lowest break-even 10 chance</option>
+          <option value="margin">Most room above break-even</option>
+        </select>
+        <span class="count" id="count"></span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th scope="col" data-sort="name">Card</th>
+            <th scope="col" data-sort="raw">Raw</th>
+            <th scope="col" data-sort="near" id="nearTh">Grade 9</th>
+            <th scope="col" data-sort="ten" id="tenTh">PSA 10</th>
+            <th scope="col" data-sort="vol">Sales/yr</th>
+            <th scope="col" data-sort="pt">PSA pop</th>
+            <th scope="col" data-sort="p10">10 chance</th>
+            <th scope="col" data-sort="be">Break-even</th>
+            <th scope="col" data-sort="profit10">Profit if 10</th>
+            <th scope="col" data-sort="ev">Expected profit</th>
+            <th scope="col" data-sort="evRoi">Expected return</th>
+          </tr></thead>
+          <tbody id="tbody"><tr><td colspan="11" class="empty-state">Loading…</td></tr></tbody>
+        </table>
+      </div>
+      <button class="btn more" id="moreBtn" hidden>Show 100 more</button>
+
+      <div class="explain">
+        <details>
+          <summary>How the numbers work</summary>
+          <p><b>Cost</b> is the raw price plus grading fee plus shipping and insurance.</p>
+          <p><b>Expected profit</b> weighs every outcome: chance of a 10 × the 10 price, chance of the near grade × its price, and everything else at the Grade 8 price, all after selling fees, minus cost. For PSA the near grade is 9; for BGS and CGC it's 9.5.</p>
+          <p><b>10 chance</b> comes from the PSA pop report when a card is matched (tagged <span class="src pop">pop</span>), otherwise your default (<span class="src">default</span>). A dashed tag means the match to PSA's list was uncertain, so it isn't used. Type in the box to set your own (<span class="src yours">yours</span>). Pop data only covers PSA; BGS and CGC use your defaults.</p>
+          <p><b>Break-even</b> is how often the card must come back a 10 for you not to lose money. <b>Most room above break-even</b> ranks by the gap between the card's 10 chance and that break-even point: the safest bets, not the biggest.</p>
+          <p><b>Sales/yr</b> is PriceCharting's yearly sales volume. A great return on a card that sells twice a year is hard to cash out.</p>
+          <p>Prices from <a href="https://www.pricecharting.com" target="_blank" rel="noopener">PriceCharting</a>. Card links go to each card's PriceCharting page.</p>
+        </details>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script>
+(function(){
+const DEFAULTS={grader:'psa',fee:25,ship:6,sell:13,gem:{psa:30,bgs:4,cgc:25},near:{psa:45,bgs:45,cgc:45},k:25,usePop:true,minRaw:5,maxRaw:'',minTen:0,minVol:0,sort:'ev'};
+const LS_SET='slabhunter:v2:settings',LS_OVR='slabhunter:v2:gemOverrides';
+const $=id=>document.getElementById(id);
+function load(k,f){try{const v=localStorage.getItem(k);return v?JSON.parse(v):f}catch(e){return f}}
+function save(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+let S=Object.assign({},DEFAULTS,load(LS_SET,{}));
+S.gem=Object.assign({},DEFAULTS.gem,S.gem||{});S.near=Object.assign({},DEFAULTS.near,S.near||{});
+let overrides=load(LS_OVR,{});
+let cards=null,meta={},shown=100,q='';
+
+const money=v=>v==null||!isFinite(v)?'—':(v<0?'−$':'$')+Math.abs(v).toLocaleString(undefined,{maximumFractionDigits:v!==0&&Math.abs(v)<100?2:0});
+const pct=v=>v==null||!isFinite(v)?'—':Math.round(v*100)+'%';
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const GNAME={psa:'PSA',bgs:'BGS',cgc:'CGC'};
+function ago(iso){if(!iso)return null;const m=(Date.now()-Date.parse(iso))/60000;if(m<60)return Math.max(1,Math.round(m))+' min ago';const h=m/60;if(h<48)return Math.round(h)+' h ago';return Math.round(h/24)+' days ago'}
+
+/* ---------- odds ---------- */
+function odds(r){
+  const G=S.grader,ov=overrides[G+':'+r.id];
+  const d10=S.gem[G]/100,d9=S.near[G]/100;
+  if(ov!=null)return{p10:ov/100,p9:d9,src:'yours'};
+  const popOk=G==='psa'&&S.usePop&&r.pt>0&&r.p10!=null&&r.pc!=='low';
+  if(popOk){
+    const K=Math.max(0,+S.k||0);
+    const p10=(r.p10+K*d10)/(r.pt+K);
+    const p9=r.p9!=null?(r.p9+K*d9)/(r.pt+K):d9;
+    return{p10,p9,src:'pop'};
+  }
+  return{p10:d10,p9:d9,src:'default',low:G==='psa'&&r.pc==='low'};
+}
+function evaluate(r){
+  const G=S.grader,ten=r[G+'10'];
+  if(!ten||!r.raw)return null;
+  const near=G==='psa'?(r.g9||r.g95||r.raw):(r.g95||r.g9||r.raw);
+  const rest=r.g8||r.raw;
+  const o=odds(r);
+  const p10=Math.min(Math.max(o.p10,0),1);
+  const pN=Math.min(Math.max(o.p9,0),1-p10);
+  const pR=Math.max(0,1-p10-pN);
+  const keep=1-S.sell/100;
+  const cost=r.raw+(+S.fee||0)+(+S.ship||0);
+  const profit10=ten*keep-cost;
+  const ev=(p10*ten+pN*near+pR*rest)*keep-cost;
+  const missW=pN+pR,miss=missW>0?(pN*near+pR*rest)/missW:rest;
+  const be=ten<=miss?Infinity:Math.max(0,(cost/keep-miss)/(ten-miss));
+  return{...r,name:r.n,set:r.s,ten,near,p10v:p10,src:o.src,low:o.low,cost,profit10,ev,evRoi:ev/cost,mult:ten/r.raw,be,margin:p10-be};
+}
+function results(){
+  const maxRaw=S.maxRaw===''||S.maxRaw==null?Infinity:+S.maxRaw;
+  const ql=q.trim().toLowerCase();
+  let list=[];
+  for(const c of cards){
+    if(c.raw<(+S.minRaw||0)||c.raw>maxRaw)continue;
+    if((+S.minVol||0)>0&&!((c.vol||0)>=+S.minVol))continue;
+    if(ql&&!(c.n+' '+c.s).toLowerCase().includes(ql))continue;
+    const e=evaluate(c);if(!e||e.ten<(+S.minTen||0))continue;
+    list.push(e);
+  }
+  const k=S.sort,asc=k==='be'||k==='name';
+  const key=k==='p10'?'p10v':k;
+  list.sort((a,b)=>{
+    if(k==='name')return a.name.localeCompare(b.name);
+    const x=a[key]??-Infinity,y=b[key]??-Infinity;
+    return x===y?0:(x<y?-1:1)*(asc?1:-1);
+  });
+  return list;
+}
+
+/* ---------- render ---------- */
+function render(){
+  const G=S.grader,gn=GNAME[G];
+  document.querySelectorAll('.seg button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.g===G)));
+  $('tenTh').textContent=gn+' 10';
+  $('nearTh').textContent=G==='psa'?'Grade 9':'Grade 9.5';
+  $('nearLbl').textContent=G==='psa'?'Default chance of a 9 (%)':'Default chance of a 9.5 (%)';
+  $('gem').value=S.gem[G];$('near').value=S.near[G];
+  $('usePopWrap').style.opacity=G==='psa'?1:.5;$('usePop').disabled=G!=='psa';
+  $('slabGrader').textContent=gn;
+  $('sort').value=S.sort;
+  if(!cards)return;
+  const list=results();
+  const tb=$('tbody');
+  if(!list.length){
+    tb.innerHTML=`<tr><td colspan="11" class="empty-state">${cards.length?'No cards match. Widen the budget, lower the sales minimum, clear the search, or switch grader.':'No price data yet. An admin needs to run a price refresh.'}</td></tr>`;
+  }else{
+    tb.innerHTML=list.slice(0,shown).map((r,i)=>{
+      const beTxt=r.be===Infinity?'never':(r.be>1?'over 100%':pct(r.be));
+      const beCls=r.be<=r.p10v?'pos':(r.be>1?'neg':'');
+      const tag=r.src==='pop'?'<span class="src pop" title="From PSA pop'+(r.pn?': '+esc(r.pn):'')+'">pop</span>':r.src==='yours'?'<span class="src yours">yours</span>':`<span class="src${r.low?' low':''}" title="${r.low?'PSA match was uncertain ('+esc(r.pn||'')+'), so your default is used':'Your default'}">default</span>`;
+      const popTxt=r.pt?`${r.p10.toLocaleString()} <span class="popn">/ ${r.pt.toLocaleString()}</span>`:'—';
+      return `<tr>
+        <td><span class="rank">${i+1}</span><span class="nm">${esc(r.name)}</span><div class="st"><a href="https://www.pricecharting.com/game/${encodeURIComponent(r.id)}" target="_blank" rel="noopener">${esc(r.set)}</a></div></td>
+        <td>${money(r.raw)}</td>
+        <td>${money(r.near)}</td>
+        <td>${money(r.ten)}</td>
+        <td>${r.vol!=null?r.vol.toLocaleString():'—'}</td>
+        <td title="PSA 10s / total graded">${popTxt}</td>
+        <td><input class="gem${r.src==='yours'?' over':''}" type="number" min="0" max="100" step="1" value="${Math.round(r.p10v*100)}" data-id="${esc(r.id)}" aria-label="Chance of a 10 for ${esc(r.name)}, percent">${tag}</td>
+        <td class="${beCls}">${beTxt}</td>
+        <td class="${r.profit10>=0?'pos':'neg'}">${money(r.profit10)}</td>
+        <td class="${r.ev>=0?'pos':'neg'}">${money(r.ev)}</td>
+        <td class="${r.evRoi>=0?'pos':'neg'}">${pct(r.evRoi)}</td>
+      </tr>`}).join('');
+  }
+  const total=list.length;
+  $('count').textContent=total.toLocaleString()+' card'+(total===1?'':'s')+(total>shown?' · showing '+Math.min(shown,total):'');
+  $('moreBtn').hidden=total<=shown;
+  hero(list[0],list.filter(r=>r.ev>0).length);
+}
+function hero(top,positive){
+  const slab=$('slab');
+  if(!top){
+    slab.classList.add('empty');
+    $('slabSet').textContent='Nothing matches';$('slabName').textContent='Adjust your filters';
+    $('slabInner').innerHTML='<div class="num">—</div><span>expected profit per card</span>';
+    $('heroCopy').innerHTML=cards&&cards.length?'<h2>No card clears your filters</h2><p>Try raising the max raw price, lowering the minimum 10 price, or lowering the sales minimum.</p>':'<h2>No prices loaded yet</h2><p>Once the price guide is downloaded, the best candidates show up here.</p>';
+    return;
+  }
+  slab.classList.remove('empty');
+  $('slabSet').textContent=top.set;$('slabName').textContent=top.name;
+  $('slabInner').innerHTML=`<div class="num ${top.ev>=0?'pos':'neg'}">${money(top.ev)}</div><span>expected profit per card</span>`;
+  const gn=GNAME[S.grader];
+  const beTxt=top.be===Infinity?'never':(top.be>1?'can\u2019t':pct(top.be));
+  const odd=top.src==='pop'?`PSA pop says ${pct(top.p10v)} of copies come back 10 (after blending)`:`assuming a ${pct(top.p10v)} chance of a 10`;
+  $('heroCopy').innerHTML=`<h2>Top pick by ${esc(($('sort').selectedOptions[0]?.textContent||'the selected column').toLowerCase())}</h2>
+    <p>Buy raw around ${money(top.raw)}; a ${gn} 10 sells near ${money(top.ten)}, ${odd}. ${positive.toLocaleString()} card${positive===1?'':'s'} in your filters have a positive expected profit.</p>
+    <div class="stats">
+      <div class="stat"><div class="num">${money(top.profit10)}</div><div>profit if it's a 10</div></div>
+      <div class="stat"><div class="num">${beTxt}</div><div>10 chance needed to break even</div></div>
+      <div class="stat"><div class="num">${top.vol!=null?top.vol.toLocaleString():'—'}</div><div>sales a year</div></div>
+    </div>`;
+}
+
+/* ---------- data ---------- */
+async function loadCards(){
+  try{
+    const r=await fetch('/api/cards');
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    const j=await r.json();
+    cards=j.cards;meta=j;
+    const a=ago(j.updatedAt);
+    const f=$('fresh');
+    f.textContent=a?`Prices updated ${a} · ${j.cards.length.toLocaleString()} cards · PSA pop data for ${j.popSets} set${j.popSets===1?'':'s'}`:'No price data yet.';
+    f.classList.toggle('warn',!a||(Date.now()-Date.parse(j.updatedAt))>1000*3600*48);
+    render();
+  }catch(e){
+    $('fresh').textContent='Couldn\u2019t load prices ('+e.message+'). Reload to try again.';$('fresh').classList.add('warn');
+    $('tbody').innerHTML='<tr><td colspan="11" class="empty-state">Prices didn\u2019t load.</td></tr>';
+  }
+}
+
+/* ---------- controls ---------- */
+function bindNum(id,fn){$(id).addEventListener('input',e=>{fn(e.target.value);shown=100;save(LS_SET,S);render()})}
+['fee','ship','sell','minRaw','maxRaw','minTen','minVol','k'].forEach(id=>$(id).value=S[id]);
+$('usePop').checked=!!S.usePop;
+bindNum('fee',v=>S.fee=+v||0);bindNum('ship',v=>S.ship=+v||0);bindNum('sell',v=>S.sell=Math.min(+v||0,99));
+bindNum('gem',v=>S.gem[S.grader]=Math.min(Math.max(+v||0,0),100));
+bindNum('near',v=>S.near[S.grader]=Math.min(Math.max(+v||0,0),100));
+bindNum('k',v=>S.k=Math.max(0,+v||0));
+bindNum('minRaw',v=>S.minRaw=v);bindNum('maxRaw',v=>S.maxRaw=v);bindNum('minTen',v=>S.minTen=v);bindNum('minVol',v=>S.minVol=v);
+$('usePop').addEventListener('change',e=>{S.usePop=e.target.checked;save(LS_SET,S);render()});
+document.querySelectorAll('.seg button').forEach(b=>b.addEventListener('click',()=>{S.grader=b.dataset.g;shown=100;save(LS_SET,S);render()}));
+$('sort').addEventListener('change',e=>{S.sort=e.target.value;save(LS_SET,S);render()});
+document.querySelectorAll('th[data-sort]').forEach(th=>th.addEventListener('click',()=>{S.sort=th.dataset.sort;save(LS_SET,S);render()}));
+let qt;$('q').addEventListener('input',e=>{clearTimeout(qt);qt=setTimeout(()=>{q=e.target.value;shown=100;render()},120)});
+$('moreBtn').addEventListener('click',()=>{shown+=100;render()});
+$('tbody').addEventListener('change',e=>{
+  const t=e.target;if(!t.classList.contains('gem'))return;
+  const key=S.grader+':'+t.dataset.id;
+  if(t.value==='')delete overrides[key];else overrides[key]=Math.min(Math.max(+t.value,0),100);
+  save(LS_OVR,overrides);render();
+});
+render();loadCards();
+})();
+</script>
+</body>
+</html>

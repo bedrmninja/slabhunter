@@ -1,0 +1,19 @@
+{
+  "name": "slab-hunter",
+  "version": "0.2.0",
+  "description": "Find raw Pokémon cards worth grading, using PriceCharting prices and PSA population data.",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node --env-file-if-exists=.env server.js",
+    "dev": "node --watch --env-file-if-exists=.env server.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=22.9"
+  },
+  "dependencies": {
+    "compression": "^1.7.5",
+    "express": "^4.21.2"
+  }
+}
